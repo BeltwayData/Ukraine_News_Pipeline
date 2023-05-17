@@ -1,0 +1,49 @@
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from datetime import datetime
+import requests
+import boto3
+
+def fetch_news_and_write_to_s3():
+    url = 'https://newsapi.org/v2/top-headlines'
+    params = {
+        'country': 'us',
+        'apiKey': '################'  # Replace with your actual API key
+    }
+
+    # Make the GET request to the News API
+    response = requests.get(url, params=params)
+
+    # Check if the request was successful (status code 200)
+    if response.status_code == 200:
+        # Parse the response as JSON
+        data = response.json()
+
+        # Write the response to S3
+        bucket_name = 'gdeltdata'  # Replace with your actual S3 bucket name
+        filename = f'news_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json'
+        
+        # Create the S3 client
+        s3 = boto3.client('s3')
+
+        # Upload the response JSON to S3
+        s3.put_object(Body=response.content, Bucket=bucket_name, Key=filename)
+    else:
+        print(f"Error: {response.status_code} - {response.text}")
+
+# Define the DAG
+dag = DAG(
+    dag_id='fetch_news_and_write_to_s3',
+    start_date=datetime(2023, 5, 9),
+    schedule_interval='0 0 * * *'  # Run once a day at midnight
+)
+
+# Define the PythonOperator task
+fetch_news_task = PythonOperator(
+    task_id='fetch_news_and_write_to_s3_task',
+    python_callable=fetch_news_and_write_to_s3,
+    dag=dag
+)
+
+# Set the task dependencies
+fetch_news_task
