@@ -1,0 +1,47 @@
+from airflow import DAG
+from airflow.operators.python_operator import PythonOperator
+from datetime import datetime, timedelta
+import requests
+import boto3
+
+def fetch_ukraine_news_and_write_to_s3():
+    url = 'https://newsapi.org/v2/everything'
+    params = {
+        'q': 'Ukraine',
+        'from': (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
+        'to': datetime.now().strftime('%Y-%m-%d'),
+        'sortBy': 'popularity',
+        'apiKey': ''  # Replace with your actual API key
+    }
+
+    # Make the GET request to fetch the news
+    response = requests.get(url, params=params)
+    data = response.json()
+
+    # Extract the articles
+    articles = data['articles']
+
+    # Define your S3 bucket name
+    bucket_name = 'gdeltdata'
+
+    # Create a unique filename with the current timestamp
+    filename = f'ukraine_news_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S")}.json'
+
+    # Write the articles to S3
+    s3 = boto3.resource('s3')
+    obj = s3.Object(bucket_name, filename)
+    obj.put(Body=str(articles))
+
+dag = DAG(
+    dag_id='ukraine_popular_news_to_s3_dag',
+    start_date=datetime(2023, 5, 9),
+    schedule_interval=None
+)
+
+fetch_news_task = PythonOperator(
+    task_id='fetch_ukraine_news',
+    python_callable=fetch_ukraine_news_and_write_to_s3,
+    dag=dag
+)
+
+fetch_news_task
